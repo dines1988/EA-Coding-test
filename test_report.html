@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>test_report.html</h1>
+    <p>Report generated on 25-Sep-2021 at 18:58:39 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-11.0.9</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.10.0", "pytest": "6.2.5"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19041-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.9.1</td></tr></table>
+    <h2>Summary</h2>
+    <p>4 tests ran in 0.78 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">2 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">2 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">EA_coding_test.py::TestIntegration::test_get_band_details_schema</td>
+          <td class="col-duration">0.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;EA_coding_test.TestIntegration object at 0x000001DBC33CF760&gt;<br/><br/>    def test_get_band_details_schema(self):<br/>         response = requests.get(endpoint)<br/>    <br/>         # Validate schema structure<br/>         assert response.status_code == 200<br/>         resp_body = response.json()<br/>    <br/>         # Validate will raise exception if given json is not what is described in schema.<br/>&gt;        validate(instance=resp_body, schema=schema)<br/><br/>EA_coding_test.py:45: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>instance = [{&#x27;bands&#x27;: [{&#x27;name&#x27;: &#x27;Critter Girls&#x27;, &#x27;recordLabel&#x27;: &#x27;ACR&#x27;}, {&#x27;name&#x27;: &#x27;Propeller&#x27;, &#x27;recordLabel&#x27;: &#x27;Pacific Records&#x27;}]}]<br/>schema = {&#x27;$schema&#x27;: &#x27;http://json-schema.org/draft-04/schema#&#x27;, &#x27;items&#x27;: [{&#x27;properties&#x27;: {&#x27;bands&#x27;: {&#x27;items&#x27;: [{...}], &#x27;type&#x27;: &#x27;array&#x27;}, &#x27;name&#x27;: {&#x27;type&#x27;: &#x27;string&#x27;}}, &#x27;required&#x27;: [&#x27;name&#x27;, &#x27;bands&#x27;], &#x27;type&#x27;: &#x27;object&#x27;}], &#x27;type&#x27;: &#x27;array&#x27;}<br/>cls = &lt;class &#x27;jsonschema.validators.create.&lt;locals&gt;.Validator&#x27;&gt;, args = (), kwargs = {}<br/>validator = &lt;jsonschema.validators.create.&lt;locals&gt;.Validator object at 0x000001DBC33CFD60&gt;, error = &lt;ValidationError: &quot;&#x27;name&#x27; is a required property&quot;&gt;<br/><br/>    def validate(instance, schema, cls=None, *args, **kwargs):<br/>        &quot;&quot;&quot;<br/>        Validate an instance under the given schema.<br/>    <br/>            &gt;&gt;&gt; validate([2, 3, 4], {&quot;maxItems&quot;: 2})<br/>            Traceback (most recent call last):<br/>                ...<br/>            ValidationError: [2, 3, 4] is too long<br/>    <br/>        :func:`validate` will first verify that the provided schema is<br/>        itself valid, since not doing so can lead to less obvious error<br/>        messages and fail in less obvious or consistent ways.<br/>    <br/>        If you know you have a valid schema already, especially if you<br/>        intend to validate multiple instances with the same schema, you<br/>        likely would prefer using the `IValidator.validate` method directly<br/>        on a specific validator (e.g. ``Draft7Validator.validate``).<br/>    <br/>    <br/>        Arguments:<br/>    <br/>            instance:<br/>    <br/>                The instance to validate<br/>    <br/>            schema:<br/>    <br/>                The schema to validate with<br/>    <br/>            cls (IValidator):<br/>    <br/>                The class that will be used to validate the instance.<br/>    <br/>        If the ``cls`` argument is not provided, two things will happen<br/>        in accordance with the specification. First, if the schema has a<br/>        :validator:`$schema` property containing a known meta-schema [#]_<br/>        then the proper validator will be used. The specification recommends<br/>        that all schemas contain :validator:`$schema` properties for this<br/>        reason. If no :validator:`$schema` property is found, the default<br/>        validator class is the latest released draft.<br/>    <br/>        Any other provided positional and keyword arguments will be passed<br/>        on when instantiating the ``cls``.<br/>    <br/>        Raises:<br/>    <br/>            `jsonschema.exceptions.ValidationError` if the instance<br/>                is invalid<br/>    <br/>            `jsonschema.exceptions.SchemaError` if the schema itself<br/>                is invalid<br/>    <br/>        .. rubric:: Footnotes<br/>        .. [#] known by a validator registered with<br/>            `jsonschema.validators.validates`<br/>        &quot;&quot;&quot;<br/>        if cls is None:<br/>            cls = validator_for(schema)<br/>    <br/>        cls.check_schema(schema)<br/>        validator = cls(schema, *args, **kwargs)<br/>        error = exceptions.best_match(validator.iter_errors(instance))<br/>        if error is not None:<br/>&gt;           raise error<br/><span class="error">E           jsonschema.exceptions.ValidationError: &#x27;name&#x27; is a required property</span><br/><span class="error">E           </span><br/><span class="error">E           Failed validating &#x27;required&#x27; in schema[&#x27;items&#x27;][0]:</span><br/><span class="error">E               {&#x27;properties&#x27;: {&#x27;bands&#x27;: {&#x27;items&#x27;: [{&#x27;properties&#x27;: {&#x27;name&#x27;: {&#x27;type&#x27;: &#x27;string&#x27;},</span><br/><span class="error">E                                                                   &#x27;recordLabel&#x27;: {&#x27;type&#x27;: &#x27;string&#x27;}},</span><br/><span class="error">E                                                    &#x27;required&#x27;: [&#x27;name&#x27;,</span><br/><span class="error">E                                                                 &#x27;recordLabel&#x27;],</span><br/><span class="error">E                                                    &#x27;type&#x27;: &#x27;object&#x27;}],</span><br/><span class="error">E                                         &#x27;type&#x27;: &#x27;array&#x27;},</span><br/><span class="error">E                               &#x27;name&#x27;: {&#x27;type&#x27;: &#x27;string&#x27;}},</span><br/><span class="error">E                &#x27;required&#x27;: [&#x27;name&#x27;, &#x27;bands&#x27;],</span><br/><span class="error">E                &#x27;type&#x27;: &#x27;object&#x27;}</span><br/><span class="error">E           </span><br/><span class="error">E           On instance[0]:</span><br/><span class="error">E               {&#x27;bands&#x27;: [{&#x27;name&#x27;: &#x27;Critter Girls&#x27;, &#x27;recordLabel&#x27;: &#x27;ACR&#x27;},</span><br/><span class="error">E                          {&#x27;name&#x27;: &#x27;Propeller&#x27;, &#x27;recordLabel&#x27;: &#x27;Pacific Records&#x27;}]}</span><br/><br/>..\..\AppData\Roaming\Python\Python39\site-packages\jsonschema\validators.py:934: ValidationError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">EA_coding_test.py::TestIntegration::test_get_band_details_data</td>
+          <td class="col-duration">0.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;EA_coding_test.TestIntegration object at 0x000001DBC33A9E20&gt;<br/><br/>    def test_get_band_details_data(self):<br/>         response = requests.get(endpoint)<br/>    <br/>         # Validate missing data<br/>         assert response.status_code == 200<br/>         resp_body = response.json()<br/>         print(len(resp_body))<br/>    <br/>         if(len(resp_body) &gt; 1):<br/>              print(json.dumps(resp_body[0]))<br/>              total_num_records = len(resp_body)<br/>              for i in range(total_num_records):<br/>                   band_data = json.dumps(resp_body[i])<br/>                   band_data = json.loads(band_data)<br/>                   assert len(str(band_data.get(&quot;name&quot;)))&gt;1<br/>                   print(&quot;++++++++++++++++++++++++++++++&quot;)<br/>                   num_of_records = len(band_data[&#x27;bands&#x27;])<br/>                   band_data = band_data[&#x27;bands&#x27;]<br/>    <br/>                   for i in range(num_of_records):<br/>                        current_record = json.dumps(band_data[i])<br/>                        current_record = json.loads(current_record)<br/>    <br/>                        try:<br/>                             if(len(current_record.get(&#x27;name&#x27;))&gt;1 and len(current_record.get(&#x27;recordLabel&#x27;))&gt;1):<br/>                                  assert True<br/>                             else:<br/>                                  print(&quot;The following record name or lable is blank...&quot;)<br/>                                  print(&quot;===============================================&quot;)<br/>                                  print(&quot;Record name:&quot; + current_record.get(&#x27;name&#x27;))<br/>                                  print(&quot;Record label:&quot; + current_record.get(&#x27;recordLabel&#x27;))<br/>                                  assert False<br/>                        except TypeError:<br/>                                  print(&quot;One of the attribute record name or label is missing...&quot;)<br/>         else:<br/>              print(&quot;No data in the response body...&quot;)<br/>&gt;             assert False<br/><span class="error">E             assert False</span><br/><br/>EA_coding_test.py:84: AssertionError<br/> ------------------------------Captured stdout call------------------------------ <br/>0
+No data in the response body...
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">EA_coding_test.py::TestIntegration::test_get_band_details_response_200</td>
+          <td class="col-duration">0.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>&lt;Response [200]&gt;
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">EA_coding_test.py::TestIntegration::test_get_band_details_response_header</td>
+          <td class="col-duration">0.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&#x27;Content-Type&#x27;: &#x27;application/json; charset=utf-8&#x27;, &#x27;Content-Length&#x27;: &#x27;2&#x27;, &#x27;Server&#x27;: &#x27;nginx&#x27;, &#x27;X-Powered-By&#x27;: &#x27;Express&#x27;, &#x27;ETag&#x27;: &#x27;W/&quot;2-3Sns9SSwMKZSYeMFnEirnh7LJYU&quot;&#x27;, &#x27;Date&#x27;: &#x27;Sat, 25 Sep 2021 08:58:38 GMT&#x27;, &#x27;Connection&#x27;: &#x27;keep-alive&#x27;, &#x27;Set-Cookie&#x27;: &#x27;AWSALB=eoQVP4Mb2FPamEZjV3H6eXZHEszQ//E7soJIqmN0npa4Iq/Juxk92jbJ32fgWA/UC7Dl89QT0Bczvplrj+iHqF/s0hexSSSbi7azLp1CK6nHKdJXtkoVjlGw/5Vg; Expires=Sat, 02 Oct 2021 08:58:38 GMT; Path=/, AWSALBCORS=eoQVP4Mb2FPamEZjV3H6eXZHEszQ//E7soJIqmN0npa4Iq/Juxk92jbJ32fgWA/UC7Dl89QT0Bczvplrj+iHqF/s0hexSSSbi7azLp1CK6nHKdJXtkoVjlGw/5Vg; Expires=Sat, 02 Oct 2021 08:58:38 GMT; Path=/; SameSite=None; Secure&#x27;, &#x27;X-Frame-Options&#x27;: &#x27;DENY&#x27;}
+<br/></div></td></tr></tbody></table></body></html>
